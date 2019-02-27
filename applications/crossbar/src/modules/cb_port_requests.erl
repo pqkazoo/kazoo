@@ -352,7 +352,15 @@ get(Context, Id, ?PATH_TOKEN_LOA) ->
 %%------------------------------------------------------------------------------
 
 -spec put(cb_context:context()) -> cb_context:context().
-put(Context) -> save(Context).
+put(Context) ->
+    Context1 = save(Context),
+    case cb_context:resp_status(Context1) of
+        'success' ->
+            Doc = cb_context:doc(Context1),
+            cb_context:set_resp_data(Context1, knm_port_request:public_fields(Doc));
+        _ ->
+            Context1
+    end.
 
 -spec put(cb_context:context(), path_token(), path_token()) -> cb_context:context().
 put(Context, Id, ?PORT_ATTACHMENT) ->
