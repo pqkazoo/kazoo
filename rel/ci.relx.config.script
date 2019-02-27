@@ -21,7 +21,7 @@ Preparer = fun (List) -> [{E,load} || E <- List, not lists:member(E, ToFilterOut
 Base = [tools
        ,sasl
        ,eunit
-       ,commone_test
+       ,common_test
        ],
 
 BASE = [{default_release, {kazoo, VSN}}

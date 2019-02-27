@@ -102,8 +102,6 @@ initialize_account(API, AccountName, StateAcc) ->
     AccountJObj = pqc_cb_response:data(Account),
     AccountId = kz_doc:id(AccountJObj),
     ?debugFmt("created account ~s(~s)", [AccountName, AccountId]),
-    % {ok, CC} = kzd_accounts:fetch(AccountId),
-    % io:put_chars(user, "\n" ++ kz_term:to_list(kz_json:encode(CC, [pretty])) ++ "\n\n"),
 
     _ = timer:sleep(500), %% too fast for kazoo
     IsAuthority = maps:get(<<"is_port_authority">>, maps:get(AccountName, ?ACCOUNTS_SETTINGS), false),
@@ -265,30 +263,46 @@ port_agent_list_seq(State) ->
     self_list_seq(State, <<"pqc_ports_authority">>).
 
 self_list_seq(State, AccountName) ->
+    [self_list_seq_lazy(State, AccountName, start)].
+    %% #{model := Model} = maps:get(AccountName, State),
+    %% Fetch = list_account_ports(pqc_kazoo_model:api(Model)),
+    %% [?IF(kz_term:is_ne_binary(Fetch)
+    %%     ,self_list_seq(State, AccountName, Fetch)
+    %%     ,?_assert(false)
+    %%     )
+    %% ].
+
+self_list_seq_lazy(State, AccountName, start) ->
+    ?debugFmt("start", []),
+    {generator
+    ,fun() ->
+             ?debugFmt("inside start", []),
+             [{"start lazily", ?_assert(true)}
+              | self_list_seq_lazy(State, AccountName, fetch)
+             ]
+     end
+    };
+self_list_seq_lazy(State, AccountName, fetch) ->
+    ?debugFmt("fetch", []),
     #{model := Model} = maps:get(AccountName, State),
-    Fetch = list_account_ports(pqc_kazoo_model:api(Model)),
-    [?IF(kz_term:is_ne_binary(Fetch)
-        ,self_list_seq(State, AccountName, Fetch)
-        ,?_assert(false)
-        )
-     | [lazy()]
-    ].
-
-lazy() ->
-    lazy_gen(10).
-
-lazy_gen(N) ->
-    ?debugFmt("before tuple ~p", [N]),
+    {generator
+    , fun() ->
+             ?debugFmt("inside fetch", []),
+              [{"fetch lazily", ?_assert(true)}
+               | self_list_seq_lazy(State, AccountName, list_account_ports(pqc_kazoo_model:api(Model)))
+              ]
+      end
+    };
+self_list_seq_lazy(State, AccountName, Fetched) ->
+    ?debugFmt("fetched", []),
     {generator
     ,fun () ->
-             ?debugFmt("inside fun ~p", [N]),
-             if N > 0 ->
-                    [{"yoo hoo " ++ kz_term:to_list(N), ?_assert(true)}
-                     | lazy_gen(N-1)
-                    ];
-                true ->
-                    []
-             end
+             ?debugFmt("inside test", []),
+             [?IF(kz_term:is_ne_binary(Fetched)
+                 ,self_list_seq(State, AccountName, Fetched)
+                 ,?_assert(false)
+                 )
+             ]
      end
     }.
 
@@ -329,15 +343,6 @@ self_list_seq(State, AccountName, Resp) ->
      ]
     ].
 
-% has_ports(Result) ->
-%     [{"data is not empty", ?_assert(kz_term:is_not_empty(Result))}
-%     ,[{"account '" ++ kz_term:to_list(kz_json:get_value(<<"account_name">>, Account)) ++ "'"
-%       ,?_assert(kz_term:is_not_empty(kz_json:get_value(<<"port_requests">>, Account, [])))
-%       }
-%       || Account <- Result
-%      ]
-%     ].
-
 port_account_seq(#{master := #{model := Model}}) ->
     API = pqc_kazoo_model:api(Model),
     [{"get master's account ports"
@@ -357,12 +362,11 @@ have_ports({error, Error}) ->
     false;
 have_ports(Resp) ->
     JObj = kz_json:decode(Resp),
-    % io:put_chars(user, iolist_to_binary(["\n\nResp\n", kz_json:encode(JObj, [pretty]), "\n\n\n"])),
     kz_json:get_ne_binary_value(<<"status">>, JObj, <<"error">>) =/= <<"error">>
         andalso is_list(kz_json:get_list_value(<<"data">>, JObj)).
 
-% ports_agent_url() ->
-%     string:join([pqc_cb_api:v2_base_url(), "port_requests"], "/").
+%% ports_agent_url() ->
+%%     string:join([pqc_cb_api:v2_base_url(), "port_requests"], "/").
 
 ports_account_url(AccountId) ->
     string:join([pqc_cb_accounts:account_url(AccountId), "port_requests"], "/").
@@ -381,12 +385,12 @@ create_port(API, AccountName) ->
                            ,kz_json:encode(Envelope)
                            ).
 
-% list_agent_ports(API) ->
-%     pqc_cb_api:make_request([#{'response_codes' => [200]}]
-%                            ,fun kz_http:get/2
-%                            ,ports_agent_url()
-%                            ,pqc_cb_api:request_headers(API)
-%                            ).
+%% list_agent_ports(API) ->
+%%     pqc_cb_api:make_request([#{'response_codes' => [200]}]
+%%                            ,fun kz_http:get/2
+%%                            ,ports_agent_url()
+%%                            ,pqc_cb_api:request_headers(API)
+%%                            ).
 
 list_account_ports(API) ->
     pqc_cb_api:make_request([#{'response_codes' => [200]}]
