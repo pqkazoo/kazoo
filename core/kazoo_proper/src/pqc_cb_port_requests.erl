@@ -277,48 +277,21 @@ port_agent_list_seq(State) ->
     self_list_seq(State, <<"pqc_ports_authority">>).
 
 self_list_seq(State, AccountName) ->
-    [self_list_seq_lazy(State, AccountName, start)].
-    %% #{model := Model} = maps:get(AccountName, State),
-    %% Fetch = list_account_ports(pqc_kazoo_model:api(Model)),
-    %% [?IF(kz_term:is_ne_binary(Fetch)
-    %%     ,self_list_seq(State, AccountName, Fetch)
-    %%     ,?_assert(false)
-    %%     )
-    %% ].
-
-self_list_seq_lazy(State, AccountName, start) ->
-    ?debugFmt("start", []),
-    {generator
-    ,fun() ->
-             ?debugFmt("inside start", []),
-             [{"start lazily", ?_assert(true)}
-              | self_list_seq_lazy(State, AccountName, fetch)
-             ]
-     end
-    };
-self_list_seq_lazy(State, AccountName, fetch) ->
-    ?debugFmt("fetch", []),
-    #{model := Model} = maps:get(AccountName, State),
-    {generator
-    , fun() ->
-             ?debugFmt("inside fetch", []),
-              [{"fetch lazily", ?_assert(true)}
-               | self_list_seq_lazy(State, AccountName, list_account_ports(pqc_kazoo_model:api(Model)))
+    [{'setup'
+     ,fun() ->
+              #{model := Model} = maps:get(AccountName, State),
+              list_account_ports(pqc_kazoo_model:api(Model))
+      end
+     ,fun(Fetched) ->
+              [{"non-empty result", ?_assert(kz_term:is_ne_binary(Fetched))}
+              ,?IF(kz_term:is_ne_binary(Fetched)
+                  ,self_list_seq(State, AccountName, Fetched)
+                  ,[]
+                  )
               ]
       end
-    };
-self_list_seq_lazy(State, AccountName, Fetched) ->
-    ?debugFmt("fetched", []),
-    {generator
-    ,fun () ->
-             ?debugFmt("inside test", []),
-             [?IF(kz_term:is_ne_binary(Fetched)
-                 ,self_list_seq(State, AccountName, Fetched)
-                 ,?_assert(false)
-                 )
-             ]
-     end
-    }.
+     }
+    ].
 
 self_list_seq(State, AccountName, Resp) ->
     WhoIsPortAuthority = maps:get(<<"port_authority">>, maps:get(AccountName, ?ACCOUNTS_SETTINGS)),
