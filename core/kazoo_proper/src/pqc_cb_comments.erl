@@ -7,7 +7,6 @@
 
 %% Manual testing
 -export([seq/0
-        % ,cleanup/0
         ]).
 
 %% API Shims

@@ -319,15 +319,15 @@ self_list_seq(State, AccountName, Resp) ->
         ]
      ]
      | [[{"authority id '" ++ kz_term:to_list(AuthorityId) ++ "'"
-       ,?_assertEqual(AuthorityId, kz_json:get_value([<<"_read_only">>, <<"port_authority">>], Port))
-       }
-      ,{"authority name '" ++ kz_term:to_list(AuthorityName) ++ "'"
-       ,?_assertEqual(AuthorityName, kz_json:get_value([<<"_read_only">>, <<"port_authority_name">>], Port))
-       }
-      ]
-     || AccountPorts <- JObj,
-        Port <- kz_json:get_list_value(<<"port_requests">>, AccountPorts, [])
-     ]
+         ,?_assertEqual(AuthorityId, kz_json:get_value([<<"_read_only">>, <<"port_authority">>], Port))
+         }
+        ,{"authority name '" ++ kz_term:to_list(AuthorityName) ++ "'"
+         ,?_assertEqual(AuthorityName, kz_json:get_value([<<"_read_only">>, <<"port_authority_name">>], Port))
+         }
+        ]
+        || AccountPorts <- JObj,
+           Port <- kz_json:get_list_value(<<"port_requests">>, AccountPorts, [])
+       ]
     ].
 
 port_account_seq(#{master := #{model := Model}}) ->
