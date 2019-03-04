@@ -8,6 +8,8 @@
 %% Manual testing
 -export([seq/0
         ,cleanup/0
+
+        ,test/0
         ]).
 
 -include_lib("eunit/include/eunit.hrl").
@@ -46,7 +48,19 @@
                  )
        ).
 
+%%------------------------------------------------------------------------------
+%% @doc Required for complinig and passing edocification.
+%%
+%% This function is required because EUnit is adding this function autmatically
+%% if it is _not_ defined using parse transform.
+%%
+%% Also our Makefile is required spec for exported function and this automatically
+%% added function by EUnit doesn't have spec, make this module not compilable.
+%% @end
+%%------------------------------------------------------------------------------
 -spec test() -> any().
+test() ->
+    eunit:test(?MODULE).
 
 -spec seq() -> any().
 seq() ->
