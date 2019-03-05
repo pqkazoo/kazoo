@@ -260,18 +260,13 @@ create(Context, {<<"port_requests">>, _}) ->
         {'error', _} ->
             cb_context:add_system_error('datastore_fault', <<"unable to submit comment to carrier">>, Context)
     end;
-create(Context, Resource) ->
+create(Context, _Resource) ->
     Doc = cb_context:doc(Context),
     Comments = kz_json:get_value(?COMMENTS, Doc, []),
     ReqData = cb_context:req_data(Context),
     NewComments = kz_json:get_value(?COMMENTS, ReqData, []),
     Doc1 = kz_json:set_value(?COMMENTS, sort(Comments ++ NewComments), Doc),
-    maybe_save(Context, Doc1, NewComments, Resource).
-
--spec maybe_save(cb_context:context(), kz_json:object(), kz_term:ne_binary(), {kz_term:ne_binary(), kz_term:ne_binaries()}) ->
-                        cb_context:context().
-maybe_save(Context, Doc, _, _) ->
-    crossbar_doc:save(cb_context:set_doc(Context, Doc)).
+    crossbar_doc:save(cb_context:set_doc(Context, Doc1)).
 
 %%------------------------------------------------------------------------------
 %% @doc
@@ -289,10 +284,10 @@ update(Context, Id) ->
 
     Doc1 =
         kz_json:set_value(?COMMENTS
-                         ,lists:append([Head1, [Comment], Tail])
+                         ,sort(lists:append([Head1, [Comment], Tail]))
                          ,Doc
                          ),
-    maybe_save(Context, Doc1, sort(lists:flatten([Comment])), cb_context:fetch(Context, 'resource')).
+    crossbar_doc:save(cb_context:set_doc(Context, Doc1)).
 
 %%------------------------------------------------------------------------------
 %% @doc

@@ -724,7 +724,7 @@ migrate(StartKey, Limit) ->
     try lists:split(Limit, Docs) of
         {Results, []} ->
             Migrated = migrate_docs(Results),
-            ?SUP_LOG_DEBUG("-- migrated ~b port requests", Migrated);
+            ?SUP_LOG_DEBUG("-- migrated ~b port requests", [Migrated]);
         {Results, [NextResult]} ->
             Migrated = migrate_docs(Results),
             ?SUP_LOG_DEBUG("-- migrated ~b port requests", [Migrated]),

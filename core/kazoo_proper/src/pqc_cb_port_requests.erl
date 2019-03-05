@@ -48,6 +48,8 @@
                  )
        ).
 
+-type state() :: map().
+
 %%------------------------------------------------------------------------------
 %% @doc Required for complinig and passing edocification.
 %%
@@ -72,6 +74,7 @@ seq() ->
                 }
                ], [verbose]).
 
+-spec init_system() -> 'ok'.
 init_system() ->
     _ = kz_data_tracing:clear_all_traces(),
     _ = [kapps_controller:start_app(App) ||
@@ -85,6 +88,7 @@ init_system() ->
         ],
     'ok'.
 
+-spec initial_state() -> state().
 initial_state() ->
     TestId = kz_binary:rand_hex(16),
     kz_util:put_callid(TestId),
@@ -109,6 +113,7 @@ initial_state() ->
             throw(failed)
     end.
 
+-spec initialize_account(pqc_cb_api:state(), kz_term:ne_binary(), state()) -> state().
 initialize_account(API, AccountName, StateAcc) ->
     Account = create_account(API, AccountName, StateAcc),
     true = kz_term:is_ne_binary(Account),
@@ -119,7 +124,7 @@ initialize_account(API, AccountName, StateAcc) ->
 
     _ = timer:sleep(500), %% too fast for kazoo
     IsAuthority = maps:get(<<"is_port_authority">>, maps:get(AccountName, ?ACCOUNTS_SETTINGS), false),
-    Whitelabel = create_whitelable(API, AccountId, AccountName, IsAuthority),
+    Whitelabel = create_whitelabel(API, AccountId, AccountName, IsAuthority),
     true = kz_term:is_ne_binary(Whitelabel),
 
     UserResp = create_admin_user(API, AccountId, AccountName),
@@ -138,11 +143,13 @@ initialize_account(API, AccountName, StateAcc) ->
                               }
              }.
 
+-spec create_account(pqc_cb_api:state(), kz_term:ne_binary(), state()) -> pqc_cb_api:response().
 create_account(API, AccountName, State) ->
     ParentName = maps:get(<<"parent_account">>, maps:get(AccountName, ?ACCOUNTS_SETTINGS)),
     AccountId = maps:get(account_id, maps:get(ParentName, State)),
     pqc_cb_accounts:create_account(API, AccountName, AccountId).
 
+-spec create_admin_user(pqc_cb_api:state(), kz_term:ne_binary(), kz_term:ne_binary()) -> pqc_cb_api:response().
 create_admin_user(API, AccountId, AccountName) ->
     Email = <<"admin@", AccountName/binary, ".com">>,
     Setters = [{fun kzd_users:set_first_name/2, <<AccountName/binary, "-admin">>}
@@ -168,31 +175,21 @@ create_admin_user(API, AccountId, AccountName) ->
                            ,kz_json:encode(Envelope)
                            ).
 
--spec create_whitelable(pqc_cb_api:state(), kz_term:ne_binary(), kz_term:ne_binary(), boolean()) ->
+-spec create_whitelabel(pqc_cb_api:state(), kz_term:ne_binary(), kz_term:ne_binary(), boolean()) ->
                                pqc_cb_api:response().
-create_whitelable(_, _, _, 'false') ->
+create_whitelabel(_, _, _, 'false') ->
     <<"no whitelable for you">>;
-create_whitelable(API, AccountId, AccountName, 'true') ->
+create_whitelabel(API, AccountId, AccountName, 'true') ->
     Setters = [{fun kzd_whitelabel:set_port_authority/2, AccountId}
               ,{fun kzd_whitelabel:set_port_support_email/2, <<"port_agent@", AccountName/binary, ".com">>}
               ],
-
-    Envelope = pqc_cb_api:create_envelope(kz_doc:setters(kz_json:new(), Setters)),
-    pqc_cb_api:make_request([201]
-                           ,fun kz_http:put/3
-                           ,whitelable_url(AccountId)
-                           ,pqc_cb_api:request_headers(API)
-                           ,kz_json:encode(Envelope)
-                           ).
-
--spec whitelable_url(string()) -> string().
-whitelable_url(AccountId) ->
-    string:join([pqc_cb_accounts:account_url(AccountId), "whitelabel"], "/").
+    pqc_cb_whitelabel:create_whitelabel(API, Setters).
 
 -spec cleanup() -> 'ok'.
 cleanup() ->
     cleanup(pqc_cb_api:authenticate()).
 
+-spec cleanup(state()) -> 'ok'.
 cleanup(#{master := #{model := Model}}) ->
     cleanup(pqc_kazoo_model:api(Model));
 cleanup(API) ->
@@ -202,6 +199,7 @@ cleanup(API) ->
     _ = pqc_cb_api:cleanup(API),
     'ok'.
 
+-spec cleanup_port_requests_db() -> 'ok'.
 cleanup_port_requests_db() ->
     ViewOptions = [{'keys', ?NUMBERS}],
     case kz_datamgr:get_results(?KZ_PORT_REQUESTS_DB, <<"port_requests/listing_by_number">>, ViewOptions) of
@@ -220,6 +218,7 @@ cleanup_port_requests_db() ->
             ?debugFmt("uanbled to delete port requests: ~p", [_R])
     end.
 
+-spec all_port_seq(state()) -> term().
 all_port_seq(State) ->
     [{"creating ports", create_ports_seq(State)}
     ,{"test agent port api", port_agent_seq(State)}
@@ -227,11 +226,13 @@ all_port_seq(State) ->
     ,{"test descendants port api", port_descendants_seq(State)}
     ].
 
+-spec create_ports_seq(state()) -> term().
 create_ports_seq(State) ->
     [create_ports_seq(State, AccountName)
      || AccountName <- ?ACCOUNT_NAMES
     ].
 
+-spec create_ports_seq(state(), kz_term:ne_binary()) -> term().
 create_ports_seq(State, AccountName) ->
     Model = maps:get(model, maps:get(AccountName, State)),
     API = pqc_kazoo_model:api(Model),
@@ -243,6 +244,7 @@ create_ports_seq(State, AccountName) ->
      }
     ].
 
+-spec create_ports_seq(state(), kz_term:ne_binary(), pqc_cb_api:response()) -> term().
 create_ports_seq(State, AccountName, Resp) ->
     WhoIsPortAuthority = maps:get(<<"port_authority">>, maps:get(AccountName, ?ACCOUNTS_SETTINGS)),
     AuthorityId = maps:get(account_id, maps:get(WhoIsPortAuthority, State)),
@@ -269,13 +271,16 @@ create_ports_seq(State, AccountName, Resp) ->
      }
     ].
 
+-spec port_agent_seq(state()) -> term().
 port_agent_seq(State) ->
     [{"listing test", port_agent_list_seq(State)}
     ].
 
+-spec port_agent_list_seq(state()) -> term().
 port_agent_list_seq(State) ->
     self_list_seq(State, <<"pqc_ports_authority">>).
 
+-spec self_list_seq(state(), kz_term:ne_binary()) -> term().
 self_list_seq(State, AccountName) ->
     [{'setup'
      ,fun() ->
@@ -293,6 +298,7 @@ self_list_seq(State, AccountName) ->
      }
     ].
 
+-spec self_list_seq(state(), kz_term:ne_binary(), pqc_cb_api:response()) -> term().
 self_list_seq(State, AccountName, Resp) ->
     WhoIsPortAuthority = maps:get(<<"port_authority">>, maps:get(AccountName, ?ACCOUNTS_SETTINGS)),
     AuthorityId = maps:get(account_id, maps:get(WhoIsPortAuthority, State)),
@@ -330,6 +336,7 @@ self_list_seq(State, AccountName, Resp) ->
        ]
     ].
 
+-spec port_account_seq(state()) -> term().
 port_account_seq(#{master := #{model := Model}}) ->
     API = pqc_kazoo_model:api(Model),
     [{"get master's account ports"
@@ -337,6 +344,7 @@ port_account_seq(#{master := #{model := Model}}) ->
      }
     ].
 
+-spec port_descendants_seq(state()) -> term().
 port_descendants_seq(#{master := #{model := Model}}) ->
     API = pqc_kazoo_model:api(Model),
     [{"get all master account descendants's ports"
@@ -344,6 +352,7 @@ port_descendants_seq(#{master := #{model := Model}}) ->
      }
     ].
 
+-spec have_ports(pqc_cb_api:response()) -> boolean().
 have_ports({error, Error}) ->
     ?debugFmt("we have some rror:~n~p~n", [Error]),
     false;
@@ -352,15 +361,19 @@ have_ports(Resp) ->
     kz_json:get_ne_binary_value(<<"status">>, JObj, <<"error">>) =/= <<"error">>
         andalso is_list(kz_json:get_list_value(<<"data">>, JObj)).
 
+%% -spec ports_agent_url() -> string().
 %% ports_agent_url() ->
 %%     string:join([pqc_cb_api:v2_base_url(), "port_requests"], "/").
 
+-spec ports_account_url(string() | kz_term:ne_binary()) -> string().
 ports_account_url(AccountId) ->
     string:join([pqc_cb_accounts:account_url(AccountId), "port_requests"], "/").
 
+-spec ports_descendants_url(string() | kz_term:ne_binary()) -> string().
 ports_descendants_url(AccountId) ->
     string:join([pqc_cb_accounts:account_url(AccountId), "descendants", "port_requests"], "/").
 
+-spec create_port(pqc_cb_api:state(), kz_term:ne_binary()) -> pqc_cb_api:response().
 create_port(API, AccountName) ->
     AccountId = pqc_cb_api:auth_account_id(API),
     Envelope = pqc_cb_api:create_envelope(seed_ports(AccountName)),
@@ -372,6 +385,7 @@ create_port(API, AccountName) ->
                            ,kz_json:encode(Envelope)
                            ).
 
+%% -spec list_agent_ports(pqc_cb_api:state()) -> pqc_cb_api:response().
 %% list_agent_ports(API) ->
 %%     pqc_cb_api:make_request([#{'response_codes' => [200]}]
 %%                            ,fun kz_http:get/2
@@ -379,6 +393,7 @@ create_port(API, AccountName) ->
 %%                            ,pqc_cb_api:request_headers(API)
 %%                            ).
 
+-spec list_account_ports(pqc_cb_api:state()) -> pqc_cb_api:response().
 list_account_ports(API) ->
     pqc_cb_api:make_request([#{'response_codes' => [200]}]
                            ,fun kz_http:get/2
@@ -386,6 +401,7 @@ list_account_ports(API) ->
                            ,pqc_cb_api:request_headers(API)
                            ).
 
+-spec list_descendants_ports(pqc_cb_api:state()) -> pqc_cb_api:response().
 list_descendants_ports(API) ->
     pqc_cb_api:make_request([#{'response_codes' => [200]}]
                            ,fun kz_http:get/2
@@ -393,6 +409,7 @@ list_descendants_ports(API) ->
                            ,pqc_cb_api:request_headers(API)
                            ).
 
+-spec seed_ports(kz_term:ne_binary()) -> kz_json:object().
 seed_ports(AccountName) ->
     Rand = kz_binary:rand_hex(1),
     PortName = <<AccountName/binary, "-", Rand/binary>>,
