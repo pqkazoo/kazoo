@@ -7,6 +7,8 @@
 
 -export([plan/0, plan/1, plan/2, plan/3]).
 
+-export([plans/0]).
+
 -export([get_dataplan/2]).
 
 -export([init/1, reload/0, reload/1, reload/2]).
@@ -61,6 +63,14 @@ plan(DbName, DocType, 'undefined') ->
     get_dataplan(DbName, DocType);
 plan(DbName, DocType, DocOwner) ->
     get_dataplan(DbName, DocType, DocOwner).
+
+-spec plans() -> [map()].
+plans() ->
+    plans(?CACHED_SYSTEM_DATAPLAN).
+
+-spec plans(map()) -> [map()].
+plans(#{<<"connections">> := #{}=Connections}) ->
+    system_dataplan_connections(Connections).
 
 maybe_override_plan(Plan, 'undefined') -> Plan;
 maybe_override_plan(Plan, #{}=Map) ->
@@ -148,6 +158,14 @@ account_modb_dataplan(AccountMODB, DocType, StorageId) ->
     AccountId = kz_util:format_account_id(AccountMODB),
     Plan = ?CACHED_STORAGE_DATAPLAN(AccountId, StorageId),
     dataplan_type_match(<<"modb">>, DocType, Plan, AccountId).
+
+-spec system_dataplan_connections([map()]) -> [map()].
+system_dataplan_connections(Connections) ->
+    Fun = fun(Tag, Acc) ->
+                  {T, S} = maybe_start_connection(kz_term:to_binary(Tag), maps:get(Tag, Connections)),
+                  [#{tag => T, server => S} | Acc]
+          end,
+    lists:foldl(Fun, [], maps:keys(Connections)).
 
 -spec dataplan_connections(map(),map()) -> [{atom(), server()}].
 dataplan_connections(Map, Index) ->
